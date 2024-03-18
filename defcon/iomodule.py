@@ -260,7 +260,7 @@ if backend.__name__ == "firedrake":
             if len(eigenvalues) > 0:
                 filename = self.dir(params) + "eigenfunctions-%d.h5" % branchid
                 if not os.path.exists(self.dir(params)):
-                   os.makedirs(self.dir(params),exist_ok=True)
+                   os.makedirs(self.dir(params), exist_ok=True)
                 with CheckpointFile(filename, 'w', comm=self.function_space.mesh().mpi_comm()) as f:
                     f.require_group("/defcon")
                     f.save_mesh(eigenfunctions[0].function_space().mesh())
