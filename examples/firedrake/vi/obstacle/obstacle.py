@@ -67,8 +67,8 @@ class ObstacleProblem(BifurcationProblem):
                    conditional(lt(x, +0.75), scale*-0.6,
                                              scale*-0.8)))
 
-        l = interpolate(obstacle, V)
-        u = interpolate(Constant(1e20), V)
+        l = Function(V).interpolate(obstacle)
+        u = Function(V).interpolate(Constant(1e20))
         return (l, u)
 
     def save_pvd(self, u, pvd, params):

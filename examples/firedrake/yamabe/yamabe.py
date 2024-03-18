@@ -43,7 +43,7 @@ class YamabeProblem(BifurcationProblem):
         return 2
 
     def initial_guess(self, V, params, n):
-        return interpolate(Constant((-1)**n), V)
+        return Function(V).interpolate(Constant((-1)**n))
 
     def solver_parameters(self, params, task, **kwargs):
         return {

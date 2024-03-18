@@ -41,7 +41,7 @@ class WingedCuspProblem(BifurcationProblem):
         return 1
 
     def initial_guess(self, V, params, n):
-        return interpolate(Constant(0.1), V)
+        return Function(V).interpolate(Constant(0.1))
 
     def number_solutions(self, params):
         lmbda = params[0]

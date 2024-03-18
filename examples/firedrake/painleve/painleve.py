@@ -45,7 +45,7 @@ class PainleveProblem(BifurcationProblem):
     def initial_guess(self, V, params, n):
         m = -sqrt(1.0/(6*L))
         x = SpatialCoordinate(V.mesh())[0]
-        return interpolate(m*x, V)
+        return Function(V).interpolate(m*x)
 
     def number_solutions(self, params):
         return 2

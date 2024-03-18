@@ -20,7 +20,7 @@ class HyperelasticityProblem(BifurcationProblem):
         rbms = [Constant((0, 1)),
                 Constant((1, 0)),
                 as_vector([-x[1], x[0]])]
-        self.rbms = [interpolate(rbm, V) for rbm in rbms]
+        self.rbms = [Function(V).interpolate(rbm) for rbm in rbms]
 
         return V
 
@@ -75,7 +75,7 @@ class HyperelasticityProblem(BifurcationProblem):
         return 1
 
     def initial_guess(self, V, params, n):
-        return interpolate(Constant((0, 0)), V)
+        return Function(V)
 
     def number_solutions(self, params):
         # Here I know the number of solutions for each value of eps.
