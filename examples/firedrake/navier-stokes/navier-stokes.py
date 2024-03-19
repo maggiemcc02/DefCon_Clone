@@ -39,9 +39,9 @@ class NavierStokesProblem(BifurcationProblem):
     def boundary_conditions(self, Z, params):
         # Inlet BC
         x = SpatialCoordinate(Z.mesh())
-        poiseuille = interpolate(as_vector([-(x[1] + 1) * (x[1] - 1), 0.0]), Z.sub(0))
+        poiseuille = as_vector([-(x[1] + 1) * (x[1] - 1), 0.0])
         bc_inflow = DirichletBC(Z.sub(0), poiseuille, 10)
-        
+
         # Wall
         bc_wall = DirichletBC(Z.sub(0), (0, 0), 12)
 

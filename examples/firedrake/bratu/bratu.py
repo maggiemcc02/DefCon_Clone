@@ -43,7 +43,7 @@ class BratuProblem(BifurcationProblem):
         return 1
 
     def initial_guess(self, V, params, n):
-        return interpolate(Constant(0), V)
+        return Function(V)
 
     def number_solutions(self, params):
         lmbda = params[0]
