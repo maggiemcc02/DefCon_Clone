@@ -1,6 +1,21 @@
 # -*- coding: utf-8 -*-
+"""
+Use the Moore-Spence system to calculate the first bifurcation point
+in lambda for buckling of an Euler elastica as the parameter mu varies
+
+
+The equation for the Euler elastica on the unit interval is given by:
+
+- d^2/dx^2 theta - lambda^2 sin(theta) + mu cos(theta) = 0
+
+with boundary conditions
+
+theta(0) = 0 = theta(1)
+
+where lambda and mu are parameters
+"""
+
 import sys
-from   math import floor
 
 from firedrake import *
 from firedrake.petsc import PETSc
@@ -30,17 +45,17 @@ class ElasticaMooreSpenceProblem(BifurcationProblem):
         ttheta, tlmbda, tphi = split(w)
 
         # Original PDE residual
-        def pde_resid(theta, lmbda, ttheta):
-            Fresid = (
+        def pde_residual(theta, lmbda, ttheta):
+            F = (
                 inner(grad(theta), grad(ttheta))*dx
                 - lmbda**2*sin(theta)*ttheta*dx
                 + mu*cos(theta)*ttheta*dx
             )
-            return Fresid
+            return F
 
         # Moore-Spence system
-        F1 = pde_resid(theta, lmbda, ttheta)
-        F2 = derivative(pde_resid(theta, lmbda, tphi), z, as_vector([phi, 0, 0]))
+        F1 = pde_residual(theta, lmbda, ttheta)
+        F2 = derivative(pde_residual(theta, lmbda, tphi), z, as_vector([phi, 0, 0]))
         F3 = inner(dot(phi, phi) - 1, tlmbda)*dx
 
         F = F1 + F2 + F3
@@ -56,13 +71,12 @@ class ElasticaMooreSpenceProblem(BifurcationProblem):
             return myparam
             
         def signedL2(z, params):
-            # Argh.
-            (theta, lmbda, phi) = z.split()
+            (theta, lmbda, phi) = z.subfunctions
             j = sqrt(assemble(inner(theta, theta)*dx))
             g = project(grad(theta)[0], theta.function_space())
             return j*g((0.0,))
 
-        return [(signedL2, "signedL2", r"$\theta'(0) \|\theta\|$"), (lambda_bif, "lambda_bif", r"$\lambda_\text{bifurcation}$")]
+        return [(lambda_bif, "lambda_bif", r"$\lambda$"), (signedL2, "signedL2", r"$\theta'(0) \|\theta\|$")]
         
 
     def number_initial_guesses(self, params):
@@ -72,29 +86,30 @@ class ElasticaMooreSpenceProblem(BifurcationProblem):
         mu = params[0]
         x = SpatialCoordinate(Z.mesh())
         z = Function(Z)
-        theta, lmbda, phi = z.split()
+        theta, lmbda, phi = z.subfunctions
         # Now do initial solve
         msh = Z.mesh()
         V = FunctionSpace(msh, "CG", 1)
         th = Function(V)
         tth = TestFunction(V)
-        lm = Constant(3.142)
-        mu_ig = Constant(mu)
-        def ig_resid(th, lm, tth):
-            Figresid = (
+        lm = Constant(3.142) # Assign an initial guess of lambda (lm)
+        mu_ig = Constant(mu) # Use the given value of mu for the initial guess solve
+        # Define the residual for finding the initial guess for theta (th). NB: is the same as pde_residual here
+        def ig_residual(th, lm, tth):
+            F = (
                 inner(grad(th), grad(tth))*dx
                 - lm**2*inner(sin(th), tth)*dx
                 + mu_ig*inner(cos(th), tth)*dx
             )
-            return Figresid
+            return F
         # Using guess for parameter lm, solve for state theta (th)
-        A = ig_resid(th, lm, tth)
+        A = ig_residual(th, lm, tth)
         bcs = [DirichletBC(V, 0.0, "on_boundary")]
         solve(A == 0, th, bcs=bcs)
 
         # Now solve eigenvalue problem for $F_u(u, \lambda)\phi = r\phi$
         # Want eigenmode phi with minimal eigenvalue r
-        B = derivative(ig_resid(th, lm, TestFunction(V)), th, TrialFunction(V))
+        B = derivative(ig_residual(th, lm, TestFunction(V)), th, TrialFunction(V))
 
         petsc_M = assemble(inner(TrialFunction(V), TestFunction(V))*dx, bcs=bcs).petscmat
         petsc_B = assemble(B, bcs=bcs).petscmat
