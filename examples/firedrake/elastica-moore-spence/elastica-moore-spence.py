@@ -25,7 +25,6 @@ import matplotlib.pyplot as plt
 
 class ElasticaMooreSpenceProblem(BifurcationProblem):
     def mesh(self, comm):
-        self.mycomm = comm
         return IntervalMesh(1000, 0, 1, comm=comm)
 
     def function_space(self, mesh):
@@ -102,34 +101,28 @@ class ElasticaMooreSpenceProblem(BifurcationProblem):
 
         # Now solve eigenvalue problem for $F_u(u, \lambda)\phi = r\phi$
         # Want eigenmode phi with minimal eigenvalue r
-        B = derivative(self.pde_residual(th, lm, TestFunction(V), params), th, TrialFunction(V))
+        evtest, evtrial = TestFunction(V), TrialFunction(V)
+        eigenproblem = LinearEigenproblem(
+            A=derivative(self.pde_residual(th, lm, evtest, params), th, evtrial),
+            M=inner(evtrial, evtest)*dx,
+            bcs=bcs)
 
-        petsc_M = assemble(inner(TrialFunction(V), TestFunction(V))*dx, bcs=bcs).petscmat
-        petsc_B = assemble(B, bcs=bcs).petscmat
+        # Eigensolver options
+        opts = {"eps_target_magnitude": None,
+                "eps_target": 0,
+                "st_type": "sinvert"}
 
-        num_eigenvalues = 1
+        # Set up eigensolver, asking for 1 eigenvalue, and solve
+        eigensolver = LinearEigensolver(eigenproblem, n_evals=1, solver_parameters=opts)
+        nconv = eigensolver.solve()
 
-        opts = PETSc.Options()
-        opts.setValue("eps_target_magnitude", None)
-        opts.setValue("eps_target", 0)
-        opts.setValue("st_type", "sinvert")
+        # Extract required eigenfuncion
+        ev_re, ev_im = eigensolver.eigenfunction(0)
 
-        mycomm = self.mycomm
-        es = SLEPc.EPS().create(comm=mycomm)
-        es.setDimensions(num_eigenvalues)
-        es.setOperators(petsc_B, petsc_M)
-        es.setProblemType(SLEPc.EPS.ProblemType.GHEP)
-        es.setFromOptions()
-        es.solve()
-
-        ev_re, ev_im = petsc_B.getVecs()
-        es.getEigenpair(0, ev_re, ev_im)
-        eigenmode = Function(V)
-        eigenmode.vector().set_local(ev_re)
-
+        # Return initial guess
         theta.assign(th)
         lmbda.assign(lm)
-        phi.assign(eigenmode)
+        phi.assign(ev_re/norm(ev_re)) # Normalise the real part of the eigenvector
         return z
 
     def number_solutions(self, params):
@@ -184,7 +177,7 @@ class ElasticaMooreSpenceProblem(BifurcationProblem):
 
 if __name__ == "__main__":
     dc = DeflatedContinuation(problem=ElasticaMooreSpenceProblem(), teamsize=1, verbose=True)
-    dc.run(values={"mu": linspace(1.0, 0.0, 21)})
+    dc.run(values={"mu": linspace(0.05, 1.0, 20)})
 
     dc.bifurcation_diagram("lambda_bif")
     plt.title(r"First bifurcation point for buckling of an Euler elastica as $\mu$ varies")
