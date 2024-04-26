@@ -1,8 +1,7 @@
 # -*- coding: utf-8 -*-
 """
 Use the Moore-Spence system to calculate the first bifurcation point
-in lambda for buckling of an Euler elastica as the parameter mu varies
-
+in lambda for buckling of an Euler elastica, as the parameter mu varies.
 
 The equation for the Euler elastica on the unit interval is given by:
 
@@ -12,7 +11,7 @@ with boundary conditions
 
 theta(0) = 0 = theta(1)
 
-where lambda and mu are parameters
+where lambda and mu are parameters.
 """
 
 import sys
@@ -39,23 +38,25 @@ class ElasticaMooreSpenceProblem(BifurcationProblem):
 
         return [(mu, "mu", r"$\mu$")]
 
+    # Original PDE residual
+    def pde_residual(self, theta, lmbda, ttheta, params):
+        mu = params[0]
+        F = (
+            inner(grad(theta), grad(ttheta))*dx
+            - lmbda**2*sin(theta)*ttheta*dx
+            + mu*cos(theta)*ttheta*dx
+        )
+        return F
+
     def residual(self, z, params, w):
         mu = params[0]
         theta, lmbda, phi = split(z)
         ttheta, tlmbda, tphi = split(w)
 
-        # Original PDE residual
-        def pde_residual(theta, lmbda, ttheta):
-            F = (
-                inner(grad(theta), grad(ttheta))*dx
-                - lmbda**2*sin(theta)*ttheta*dx
-                + mu*cos(theta)*ttheta*dx
-            )
-            return F
 
         # Moore-Spence system
-        F1 = pde_residual(theta, lmbda, ttheta)
-        F2 = derivative(pde_residual(theta, lmbda, tphi), z, as_vector([phi, 0, 0]))
+        F1 = self.pde_residual(theta, lmbda, ttheta, params)
+        F2 = derivative(self.pde_residual(theta, lmbda, tphi, params), z, as_vector([phi, 0, 0]))
         F3 = inner(dot(phi, phi) - 1, tlmbda)*dx
 
         F = F1 + F2 + F3
@@ -69,7 +70,7 @@ class ElasticaMooreSpenceProblem(BifurcationProblem):
             with z.sub(1).dat.vec_ro as x:
                 myparam = x.norm()
             return myparam
-            
+
         def signedL2(z, params):
             (theta, lmbda, phi) = z.subfunctions
             j = sqrt(assemble(inner(theta, theta)*dx))
@@ -77,7 +78,6 @@ class ElasticaMooreSpenceProblem(BifurcationProblem):
             return j*g((0.0,))
 
         return [(lambda_bif, "lambda_bif", r"$\lambda$"), (signedL2, "signedL2", r"$\theta'(0) \|\theta\|$")]
-        
 
     def number_initial_guesses(self, params):
         return 1
@@ -94,22 +94,15 @@ class ElasticaMooreSpenceProblem(BifurcationProblem):
         tth = TestFunction(V)
         lm = Constant(3.142) # Assign an initial guess of lambda (lm)
         mu_ig = Constant(mu) # Use the given value of mu for the initial guess solve
-        # Define the residual for finding the initial guess for theta (th). NB: is the same as pde_residual here
-        def ig_residual(th, lm, tth):
-            F = (
-                inner(grad(th), grad(tth))*dx
-                - lm**2*inner(sin(th), tth)*dx
-                + mu_ig*inner(cos(th), tth)*dx
-            )
-            return F
+
         # Using guess for parameter lm, solve for state theta (th)
-        A = ig_residual(th, lm, tth)
+        A = self.pde_residual(th, lm, tth, params)
         bcs = [DirichletBC(V, 0.0, "on_boundary")]
         solve(A == 0, th, bcs=bcs)
 
         # Now solve eigenvalue problem for $F_u(u, \lambda)\phi = r\phi$
         # Want eigenmode phi with minimal eigenvalue r
-        B = derivative(ig_residual(th, lm, TestFunction(V)), th, TrialFunction(V))
+        B = derivative(self.pde_residual(th, lm, TestFunction(V), params), th, TrialFunction(V))
 
         petsc_M = assemble(inner(TrialFunction(V), TestFunction(V))*dx, bcs=bcs).petscmat
         petsc_B = assemble(B, bcs=bcs).petscmat
@@ -145,7 +138,11 @@ class ElasticaMooreSpenceProblem(BifurcationProblem):
     def squared_norm(self, a, b, params):
         (theta, lmbda, phi) = split(a)
         (theta2, lmbda2, phi2) = split(b)
-        return inner(theta - theta2, theta - theta2)*dx + inner(grad(theta - theta2), grad(theta - theta2))*dx + inner(lmbda - lmbda2, lmbda - lmbda2)*dx
+        return (
+                 inner(theta - theta2, theta - theta2)*dx
+               + inner(grad(theta - theta2), grad(theta - theta2))*dx
+               + inner(lmbda - lmbda2, lmbda - lmbda2)*dx
+               )
 
     def save_pvd(self, z, pvd, params):
         (theta, lmbda, phi) = z.split()
